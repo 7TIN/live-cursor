@@ -7,7 +7,14 @@ import {
 } from "@/components/ui/card";
 // import { APITester } from "./APITester";
 import "./index.css";
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type MouseEvent,
+} from "react";
 import type { ServerWebSocket } from "bun";
 
 interface websocketType extends WebSocket {
@@ -15,14 +22,39 @@ interface websocketType extends WebSocket {
 }
 
 export function App() {
+  const [mousePosition, setMousePosition] = useState({
+    x: 0,
+    y: 0,
+  });
+
+  useEffect(() => {
+    // use the DOM MouseEvent type to match window.addEventListener signature
+    const handleMouseEvent = (e: globalThis.MouseEvent) => {
+      setMousePosition({
+        x: e.clientX,
+        y: e.clientY,
+      });
+    };
+
+    window.addEventListener("mousemove", handleMouseEvent);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseEvent);
+    };
+  }, []);
+
   const [msg, setMsg] = useState<string>("");
   const [msgInput, setMsgInput] = useState<string>("");
 
   const webSocket = useRef<websocketType | null>(null);
 
+  // addEventListener('mousemove', (e: MouseEvent<mouse>) => {
+  //   console.log()
+  // })
+
   const handleInputMsgChange = (e: ChangeEvent<HTMLInputElement>) => {
     setMsgInput(e.target.value);
-  }
+  };
 
   const handleMessage = (e: Event) => {};
 
@@ -49,7 +81,7 @@ export function App() {
       // console.log(e.data);
       // const msg = JSON.stringify(e.data)
       // console.log(msg)
-      setMsg(e.data)
+      setMsg(e.data);
     });
 
     wss.addEventListener("error", (e) => {});
@@ -62,12 +94,24 @@ export function App() {
   return (
     <div className="container mx-auto p-8 text-center relative z-10 font-mono">
       Hello
-      <p>
-        {msg}
-      </p>
+      <p>{msg}</p>
       <div className="flex p-4 gap-x-4">
-        <input type="text" className="border-2 px-2 rounded-md border-neutral-500 text-neutral-700 font-mono placeholder:text-neutral-300" placeholder="enter msg here" onChange={handleInputMsgChange} />
-        <button className="rounded-md py-1 px-4 border-2 active:bg-neutral-700 bg-neutral-900 text-white" onClick={HandleSendMsg}>Send</button>
+        <input
+          type="text"
+          className="border-2 px-2 rounded-md border-neutral-500 text-neutral-700 font-mono placeholder:text-neutral-300"
+          placeholder="enter msg here"
+          onChange={handleInputMsgChange}
+        />
+        <button
+          className="rounded-md py-1 px-4 border-2 active:bg-neutral-700 bg-neutral-900 text-white"
+          onClick={HandleSendMsg}
+        >
+          Send
+        </button>
+      </div>
+      <div>
+        <p>x : {mousePosition.x}</p>
+        <p>y : {mousePosition.y}</p>
       </div>
     </div>
   );
