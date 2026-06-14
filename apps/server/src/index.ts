@@ -5,9 +5,6 @@ import { websocket } from "hono/bun";
 
 const app = new Hono();
 
-
-
-
 // type WebSocket = {
 //     send() : () => {}
 // }
@@ -25,7 +22,7 @@ const app = new Hono();
 // }
 
 interface websocketType extends ServerWebSocket {
-    connectionID?: string, 
+  connectionID?: string;
 }
 
 app.get("/health", (c) => {
@@ -35,7 +32,7 @@ app.get("/health", (c) => {
   });
 });
 
-const sockets : websocketType[] = [];
+const sockets: websocketType[] = [];
 
 Bun.serve({
   port: 3001,
@@ -53,21 +50,23 @@ Bun.serve({
 
   // websocket : webSocket
   websocket: {
-
-    open: (ws : websocketType) => {
+    open: (ws: websocketType) => {
       console.log("connection open");
-      ws.connectionID = "2342sdsd"
+      const connectionID = crypto.randomUUID();
+      ws.connectionID = connectionID;
       sockets.push(ws);
     },
     close: (ws) => {
       console.log("connection close");
     },
-    message: (ws : websocketType, message) => {
+    message: (ws: websocketType, message) => {
       console.log(message);
       sockets.map((w) => {
-        w.send(message);
-        w.send(w.connectionID ? w.connectionID : "null")
-      })
+        if (w.connectionID !== ws.connectionID) {
+          w.send(message);
+        //   w.send(w.connectionID ?? "null");
+        }
+      });
     },
   },
 });
