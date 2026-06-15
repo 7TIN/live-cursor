@@ -38,11 +38,31 @@ type CursorState = {
   isVisible: boolean;
 };
 
+const useThrottle = <T extends (...args: globalThis.MouseEvent[]) => void>(
+  callback: T,
+  delay: number,
+) => {
+  let lastcall = 0;
+  return (...args: Parameters<T>) => {
+    const now = Date.now();
+
+    if (now - lastcall >= delay) {
+      lastcall = now;
+      callback(...args);
+    }
+  };
+};
+
+const getRandomColor = () => {
+  return COLORS[Math.floor(Math.random() * COLORS.length)];
+};
+
 export function App() {
   const [cursors, setCursors] = useState<Record<string, CursorState>>({});
   const cursorsRef = useRef<Record<string, CursorState>>({});
+  const cursorRef = useRef<HTMLDivElement>(null);
   const [msg, setMsg] = useState<string>("");
-  const [msgInput, setMsgInput] = useState<string>("");
+  // const [msgInput, setMsgInput] = useState<string>("");
   const webSocket = useRef<websocketType | null>(null);
   const positionQueueRef = useRef<mousePositionType[]>([]);
   const animationFrameRef = useRef<number | null>(null);
@@ -50,10 +70,6 @@ export function App() {
     x: 0,
     y: 0,
   });
-
-  const getRandomColor = () => {
-    return COLORS[Math.floor(Math.random() * COLORS.length)];
-  };
 
   // const [mousePositions, setMousePositions] = useState<mousePositionType[]>([]);
 
@@ -106,54 +122,71 @@ export function App() {
     };
   }, []);
 
-  const useThrottle = <T extends (...args: globalThis.MouseEvent[]) => void>(
-    callback: T,
-    delay: number,
-  ) => {
-    let lastcall = 0;
-    return (...args: Parameters<T>) => {
-      const now = Date.now();
+  // useEffect(() => {
+  //   const handleMouseEvent = useThrottle((e: globalThis.MouseEvent) => {
+  //     const position = {
+  //       x: e.clientX,
+  //       y: e.clientY,
+  //     };
+  //     setMousePosition(position);
+  //     if (webSocket.current?.readyState === WebSocket.OPEN) {
+  //       webSocket.current?.send(
+  //         JSON.stringify({ type: "mousePosition", mousePosition: position }),
+  //       );
+  //     }
+  //   }, 50);
 
-      if (now - lastcall >= delay) {
-        lastcall = now;
-        callback(...args);
-      }
-    };
-  };
+  //   window.addEventListener("mousemove", handleMouseEvent);
+
+  //   return () => {
+  //     window.removeEventListener("mousemove", handleMouseEvent);
+  //   };
+  // }, []);
+
+  // const handleInputMsgChange = (e: ChangeEvent<HTMLInputElement>) => {
+  //   setMsgInput(e.target.value);
+  // };
+
+  // const handleMessage = (e: Event) => {};
+
+  // const HandleSendMsg = (e: MouseEvent<HTMLButtonElement>) => {
+  //   e.preventDefault();
+  //   webSocket.current?.send(
+  //     JSON.stringify({ type: "chat", message: msgInput }),
+  //   );
+  // };
 
   useEffect(() => {
-    const handleMouseEvent = useThrottle((e: globalThis.MouseEvent) => {
-      const position = {
-        x: e.clientX,
-        y: e.clientY,
-      };
-      setMousePosition(position);
+    const sendPosition = useThrottle((position: mousePositionType) => {
       if (webSocket.current?.readyState === WebSocket.OPEN) {
-        webSocket.current?.send(
-          JSON.stringify({ type: "mousePosition", mousePosition: position }),
+        webSocket.current.send(
+          JSON.stringify({
+            type: "mousePosition",
+            mousePosition: position,
+          }),
         );
       }
     }, 50);
 
-    window.addEventListener("mousemove", handleMouseEvent);
+    const handleMouseMove = (e: globalThis.MouseEvent) => {
+      const position = {
+        x: e.clientX,
+        y: e.clientY,
+      };
+
+      // smooth local cursor
+      setMousePosition(position);
+
+      // throttled network update
+      sendPosition(position);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
 
     return () => {
-      window.removeEventListener("mousemove", handleMouseEvent);
+      window.removeEventListener("mousemove", handleMouseMove);
     };
   }, []);
-
-  const handleInputMsgChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setMsgInput(e.target.value);
-  };
-
-  const handleMessage = (e: Event) => {};
-
-  const HandleSendMsg = (e: MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    webSocket.current?.send(
-      JSON.stringify({ type: "chat", message: msgInput }),
-    );
-  };
 
   useEffect(() => {
     const wss = new WebSocket("ws://localhost:3001/ws") as websocketType;
@@ -223,25 +256,19 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex flex-col justify-center items-center mx-auto p-8 z-10 font-mono">
-      {/* <div
-        className="fixed pointer-events-none transition-none"
-        style={{
-          left: animatedPosition.x,
-          top: animatedPosition.y,
-          transform: "translate(-12px, -12px)",
-        }}
-      >
-        <Pointer className="w-6 h-6 text-blue-500" />
-      </div> */}
-      {/* <RemoteCursor
-        x={animatedPosition.x}
-        y={animatedPosition.y}
-        userName="Remote User"
-        color="blue"
-        isVisible={isCursorVisible}
-      /> */}
-
+    <div className="flex flex-col justify-center items-center mx-auto p-8 z-10 font-mono cursor-none">
+      <div className="mb-8 text-center">
+        <h1 className="text-2xl font-bold mb-2">Remote Cursor Tracking</h1>
+        <p className="text-sm text-gray-500">
+          Move your cursor and see it smoothly animated from remote updates
+        </p>
+      </div>
+      <RemoteCursor
+        x={mousePosition.x}
+        y={mousePosition.y}
+        userName=""
+        isVisible={true}
+      />
       {Object.entries(cursors).map(([userId, cursor]) => (
         <RemoteCursor
           key={userId}
@@ -257,21 +284,3 @@ export function App() {
 }
 
 export default App;
-
-// <div className="absolute">
-//   <p>All the positions</p>
-//   {mousePositions.map((pos, key) => (
-//     <div
-//       key={key}
-//       className="fixed pointer-events-none"
-//       style={{
-//         left: pos.x,
-//         top: pos.y,
-//       }}
-//     >
-//       {/* <p>{pos.x}</p>
-//       <p>{pos.y}</p> */}
-//       <Pointer />
-//     </div>
-//   ))}
-// </div>
