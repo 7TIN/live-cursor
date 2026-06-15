@@ -16,6 +16,8 @@ import {
   type MouseEvent,
 } from "react";
 import type { ServerWebSocket } from "bun";
+import { Pointer } from "lucide-react";
+import { RemoteCursor } from "./components/ui/RemoteCursor";
 
 interface websocketType extends WebSocket {
   connectionID?: string;
@@ -31,6 +33,70 @@ export function App() {
     x: 0,
     y: 0,
   });
+  const [animatedPosition, setAnimatedPosition] = useState({
+    x: 0,
+    y: 0,
+  });
+
+  const positionQueueRef = useRef<mousePositionType[]>([]);
+  const animationFrameRef = useRef<number | null>(null);
+  const animationStateRef = useRef({
+    isAnimating: false,
+    startPosition: { x: 0, y: 0 },
+    targetPosition: { x: 0, y: 0 },
+    startTime: 0,
+    duration: 120, // 120ms smooth animation between positions
+  });
+
+  const lerp = (start: number, end: number, t: number): number => {
+    return start + (end - start) * t;
+  };
+  const animateNextPosition = useCallback(() => {
+    const state = animationStateRef.current;
+
+    if (state.isAnimating) {
+      const now = Date.now();
+      const elapsed = now - state.startTime;
+      const progress = Math.min(elapsed / state.duration, 1);
+
+      const newX = lerp(
+        state.startPosition.x,
+        state.targetPosition.x,
+        progress,
+      );
+      const newY = lerp(
+        state.startPosition.y,
+        state.targetPosition.y,
+        progress,
+      );
+
+      setAnimatedPosition({ x: newX, y: newY });
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animateNextPosition);
+      } else {
+        // Animation complete, move to next position in queue
+        state.isAnimating = false;
+        if (positionQueueRef.current.length > 0) {
+          const nextTarget = positionQueueRef.current.shift()!;
+          state.startPosition = { x: newX, y: newY };
+          state.targetPosition = nextTarget;
+          state.startTime = Date.now();
+          state.isAnimating = true;
+          animationFrameRef.current =
+            requestAnimationFrame(animateNextPosition);
+        }
+      }
+    } else if (positionQueueRef.current.length > 0) {
+      // Start new animation
+      const nextTarget = positionQueueRef.current.shift()!;
+      state.startPosition = { ...animatedPosition };
+      state.targetPosition = nextTarget;
+      state.startTime = Date.now();
+      state.isAnimating = true;
+      animationFrameRef.current = requestAnimationFrame(animateNextPosition);
+    }
+  }, [animatedPosition]);
 
   const useThrottle = <T extends (...args: globalThis.MouseEvent[]) => void>(
     callback: T,
@@ -68,7 +134,7 @@ export function App() {
           JSON.stringify({ type: "mousePosition", mousePosition: position }),
         );
       }
-    }, 100);
+    }, 50);
 
     window.addEventListener("mousemove", handleMouseEvent);
 
@@ -91,7 +157,9 @@ export function App() {
 
   const HandleSendMsg = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    webSocket.current?.send(JSON.stringify({type : "chat", message: msgInput}));
+    webSocket.current?.send(
+      JSON.stringify({ type: "chat", message: msgInput }),
+    );
   };
 
   useEffect(() => {
@@ -105,7 +173,7 @@ export function App() {
     });
 
     wss.addEventListener("close", (e) => {
-      wss.send(JSON.stringify({type : "connection", message : "Close"}));
+      wss.send(JSON.stringify({ type: "connection", message: "Close" }));
     });
 
     wss.addEventListener("message", (e) => {
@@ -114,7 +182,10 @@ export function App() {
       // console.log(msg)
       const msg = JSON.parse(e.data);
       if (msg.type === "mousePosition") {
-        setMousePositions((mp) => [...mp, msg.mousePosition]);
+        // setMousePositions((mp) => [...mp, msg.mousePosition]);
+
+        positionQueueRef.current.push(msg.mousePosition);
+        animateNextPosition();
       } else if (msg.type === "chat") {
         setMsg(msg.message);
       }
@@ -123,43 +194,52 @@ export function App() {
     wss.addEventListener("error", (e) => {});
 
     return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
       wss.close();
     };
   }, []);
 
   return (
     <div className="flex flex-col justify-center items-center mx-auto p-8 z-10 font-mono">
-      Hello
-      <p>{msg}</p>
-      <div className="flex p-4 gap-x-4">
-        <input
-          type="text"
-          className="border-2 px-2 rounded-md border-neutral-500 text-neutral-700 font-mono placeholder:text-neutral-300"
-          placeholder="enter msg here"
-          onChange={handleInputMsgChange}
-        />
-        <button
-          className="rounded-md py-1 px-4 border-2 active:bg-neutral-700 bg-neutral-900 text-white"
-          onClick={HandleSendMsg}
-        >
-          Send
-        </button>
-      </div>
-      <div>
-        <p>x : {mousePosition.x}</p>
-        <p>y : {mousePosition.y}</p>
-      </div>
-      <div>
-        <p>All the positions</p>
-        {mousePositions.map((pos, key) => (
-          <div key={key}>
-            <p>{pos.x}</p>
-            <p>{pos.y}</p>
-          </div>
-        ))}
-      </div>
+      {/* <div
+        className="fixed pointer-events-none transition-none"
+        style={{
+          left: animatedPosition.x,
+          top: animatedPosition.y,
+          transform: "translate(-12px, -12px)",
+        }}
+      >
+        <Pointer className="w-6 h-6 text-blue-500" />
+      </div> */}
+      <RemoteCursor
+        x={animatedPosition.x}
+        y={animatedPosition.y}
+        userName="Remote User"
+        color="blue"
+        isVisible={true}
+      />
     </div>
   );
 }
 
 export default App;
+
+// <div className="absolute">
+//   <p>All the positions</p>
+//   {mousePositions.map((pos, key) => (
+//     <div
+//       key={key}
+//       className="fixed pointer-events-none"
+//       style={{
+//         left: pos.x,
+//         top: pos.y,
+//       }}
+//     >
+//       {/* <p>{pos.x}</p>
+//       <p>{pos.y}</p> */}
+//       <Pointer />
+//     </div>
+//   ))}
+// </div>
