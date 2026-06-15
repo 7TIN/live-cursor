@@ -18,8 +18,12 @@ type mousePositionType = {
   y: number;
 };
 
+const COLORS = ["blue", "red", "green", "purple", "pink", "yellow"] as const;
+
 type CursorState = {
   userId: string;
+
+  color: string;
 
   animatedPosition: {
     x: number;
@@ -37,20 +41,21 @@ type CursorState = {
 export function App() {
   const [cursors, setCursors] = useState<Record<string, CursorState>>({});
   const cursorsRef = useRef<Record<string, CursorState>>({});
-
+  const [msg, setMsg] = useState<string>("");
+  const [msgInput, setMsgInput] = useState<string>("");
+  const webSocket = useRef<websocketType | null>(null);
+  const positionQueueRef = useRef<mousePositionType[]>([]);
+  const animationFrameRef = useRef<number | null>(null);
   const [mousePosition, setMousePosition] = useState({
     x: 0,
     y: 0,
   });
 
-  const [msg, setMsg] = useState<string>("");
-  const [msgInput, setMsgInput] = useState<string>("");
+  const getRandomColor = () => {
+    return COLORS[Math.floor(Math.random() * COLORS.length)];
+  };
+
   // const [mousePositions, setMousePositions] = useState<mousePositionType[]>([]);
-
-  const webSocket = useRef<websocketType | null>(null);
-
-  const positionQueueRef = useRef<mousePositionType[]>([]);
-  const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     const animate = () => {
@@ -176,6 +181,8 @@ export function App() {
             [msg.userId]: {
               userId: msg.userId,
 
+              color: existing?.color ?? getRandomColor(),
+
               animatedPosition: existing?.animatedPosition ?? msg.mousePosition,
 
               targetPosition: msg.mousePosition,
@@ -242,6 +249,7 @@ export function App() {
           y={cursor.animatedPosition.y}
           userName={userId}
           isVisible={cursor.isVisible}
+          color={cursor.color}
         />
       ))}
     </div>
