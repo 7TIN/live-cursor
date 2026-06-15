@@ -9,6 +9,7 @@ import {
 } from "react";
 import { RemoteCursor } from "./components/ui/RemoteCursor";
 import { MousePointer2 } from "lucide-react";
+import { CanvasBackground } from "./components/CanvasBackground";
 
 interface websocketType extends WebSocket {
   connectionID?: string;
@@ -262,42 +263,45 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex flex-col justify-center items-center mx-auto p-8 z-10 font-mono cursor-none">
-      <div className="mb-8 text-center">
-        <h1 className="text-2xl font-bold mb-2">Remote Cursor Tracking</h1>
-        <p className="text-sm text-gray-500">
-          Move your cursor and see it smoothly animated from remote updates
-        </p>
-      </div>
-      {/* <RemoteCursor
+    <>
+      <CanvasBackground />
+      <div className="relative flex flex-col justify-center items-center mx-auto p-8 z-10 font-mono min-h-screen">
+        <div className="mb-8 text-center">
+          <h1 className="text-2xl font-bold mb-2">Remote Cursor Tracking</h1>
+          <p className="text-sm text-gray-500">
+            Move your cursor and see it smoothly animated from remote updates
+          </p>
+        </div>
+        {/* <RemoteCursor
         x={mousePosition.x}
         y={mousePosition.y}
         userName=""
         isVisible={true}
       /> */}
 
-      <div
-        ref={cursorRef}
-        className="fixed pointer-events-none z-[9999]"
-        style={{
-          left: 0,
-          top: 0,
-        }}
-      >
-        <MousePointer2 className="w-6 h-6 fill-cyan-700 stroke-white/20 drop-shadow-lg" />
-      </div>
+        <div
+          ref={cursorRef}
+          className="fixed pointer-events-none z-[9999]"
+          style={{
+            left: 0,
+            top: 0,
+          }}
+        >
+          <MousePointer2 className="w-6 h-6 fill-cyan-700 stroke-white/20 drop-shadow-lg" />
+        </div>
 
-      {Object.entries(cursors).map(([userId, cursor]) => (
-        <RemoteCursor
-          key={userId}
-          x={cursor.animatedPosition.x}
-          y={cursor.animatedPosition.y}
-          userName={userId}
-          isVisible={cursor.isVisible}
-          color={cursor.color}
-        />
-      ))}
-    </div>
+        {Object.entries(cursors).map(([userId, cursor]) => (
+          <RemoteCursor
+            key={userId}
+            x={cursor.animatedPosition.x}
+            y={cursor.animatedPosition.y}
+            userName={userId}
+            isVisible={cursor.isVisible}
+            color={cursor.color}
+          />
+        ))}
+      </div>
+    </>
   );
 }
 
