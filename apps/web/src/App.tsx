@@ -8,6 +8,7 @@ import {
   type MouseEvent,
 } from "react";
 import { RemoteCursor } from "./components/ui/RemoteCursor";
+import { MousePointer2 } from "lucide-react";
 
 interface websocketType extends WebSocket {
   connectionID?: string;
@@ -175,7 +176,12 @@ export function App() {
       };
 
       // smooth local cursor
-      setMousePosition(position);
+      // setMousePosition(position);
+
+      cursorRef.current?.style.setProperty(
+        "transform",
+        `translate(${e.clientX - 12}px, ${e.clientY - 12}px)`,
+      );
 
       // throttled network update
       sendPosition(position);
@@ -263,12 +269,24 @@ export function App() {
           Move your cursor and see it smoothly animated from remote updates
         </p>
       </div>
-      <RemoteCursor
+      {/* <RemoteCursor
         x={mousePosition.x}
         y={mousePosition.y}
         userName=""
         isVisible={true}
-      />
+      /> */}
+
+      <div
+        ref={cursorRef}
+        className="fixed pointer-events-none z-[9999]"
+        style={{
+          left: 0,
+          top: 0,
+        }}
+      >
+        <MousePointer2 className="w-6 h-6 fill-cyan-700 stroke-white/20 drop-shadow-lg" />
+      </div>
+
       {Object.entries(cursors).map(([userId, cursor]) => (
         <RemoteCursor
           key={userId}
