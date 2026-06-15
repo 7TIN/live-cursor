@@ -61,12 +61,24 @@ Bun.serve({
     },
     message: (ws: websocketType, message) => {
       console.log(message);
-      sockets.map((w) => {
-        if (w.connectionID !== ws.connectionID) {
-          w.send(message);
-        //   w.send(w.connectionID ?? "null");
-        }
-      });
+      const parsed = JSON.parse(message.toString());
+
+      if (parsed.type === "mousePosition") {
+        sockets.map((w) => {
+          if (w.connectionID !== ws.connectionID) {
+            w.send(JSON.stringify(parsed));
+          }
+        });
+      } else if (parsed.type === "chat") {
+        sockets.map((w) => {
+          if (w.connectionID !== ws.connectionID) {
+            w.send(JSON.stringify(parsed));
+          }
+        });
+      }
+      else if (parsed.type === "connection") {
+        console.log(parsed.message)
+      }
     },
   },
 });

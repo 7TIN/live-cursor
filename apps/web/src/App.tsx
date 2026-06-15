@@ -21,20 +21,54 @@ interface websocketType extends WebSocket {
   connectionID?: string;
 }
 
+type mousePositionType = {
+  x: number;
+  y: number;
+};
+
 export function App() {
   const [mousePosition, setMousePosition] = useState({
     x: 0,
     y: 0,
   });
 
+  const useThrottle = <T extends (...args: globalThis.MouseEvent[]) => void>(
+    callback: T,
+    delay: number,
+  ) => {
+    let lastcall = 0;
+    return (...args: Parameters<T>) => {
+      const now = Date.now();
+
+      if (now - lastcall >= delay) {
+        lastcall = now;
+        callback(...args);
+      }
+    };
+  };
+
   useEffect(() => {
     // use the DOM MouseEvent type to match window.addEventListener signature
-    const handleMouseEvent = (e: globalThis.MouseEvent) => {
-      setMousePosition({
+    // const handleMouseEvent = (e: globalThis.MouseEvent) => {
+    //   setMousePosition({
+    //     x: e.clientX,
+    //     y: e.clientY,
+    //   });
+    // };
+    // function Throttle < T extends (...args : []) => void>(callback : T, delay : number) {}
+
+    const handleMouseEvent = useThrottle((e: globalThis.MouseEvent) => {
+      const position = {
         x: e.clientX,
         y: e.clientY,
-      });
-    };
+      };
+      setMousePosition(position);
+      if (webSocket.current?.readyState === WebSocket.OPEN) {
+        webSocket.current?.send(
+          JSON.stringify({ type: "mousePosition", mousePosition: position }),
+        );
+      }
+    }, 100);
 
     window.addEventListener("mousemove", handleMouseEvent);
 
@@ -45,12 +79,9 @@ export function App() {
 
   const [msg, setMsg] = useState<string>("");
   const [msgInput, setMsgInput] = useState<string>("");
+  const [mousePositions, setMousePositions] = useState<mousePositionType[]>([]);
 
   const webSocket = useRef<websocketType | null>(null);
-
-  // addEventListener('mousemove', (e: MouseEvent<mouse>) => {
-  //   console.log()
-  // })
 
   const handleInputMsgChange = (e: ChangeEvent<HTMLInputElement>) => {
     setMsgInput(e.target.value);
@@ -60,7 +91,7 @@ export function App() {
 
   const HandleSendMsg = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    webSocket.current?.send(msgInput);
+    webSocket.current?.send(JSON.stringify({type : "chat", message: msgInput}));
   };
 
   useEffect(() => {
@@ -70,18 +101,23 @@ export function App() {
 
     wss.addEventListener("open", (e) => {
       console.log("connected");
-      wss.send("connected from client");
+      // wss.send("connected from client");
     });
 
     wss.addEventListener("close", (e) => {
-      wss.send("connection close");
+      wss.send(JSON.stringify({type : "connection", message : "Close"}));
     });
 
     wss.addEventListener("message", (e) => {
       // console.log(e.data);
       // const msg = JSON.stringify(e.data)
       // console.log(msg)
-      setMsg(e.data);
+      const msg = JSON.parse(e.data);
+      if (msg.type === "mousePosition") {
+        setMousePositions((mp) => [...mp, msg.mousePosition]);
+      } else if (msg.type === "chat") {
+        setMsg(msg.message);
+      }
     });
 
     wss.addEventListener("error", (e) => {});
@@ -92,7 +128,7 @@ export function App() {
   }, []);
 
   return (
-    <div className="container mx-auto p-8 text-center relative z-10 font-mono">
+    <div className="flex flex-col justify-center items-center mx-auto p-8 z-10 font-mono">
       Hello
       <p>{msg}</p>
       <div className="flex p-4 gap-x-4">
@@ -112,6 +148,15 @@ export function App() {
       <div>
         <p>x : {mousePosition.x}</p>
         <p>y : {mousePosition.y}</p>
+      </div>
+      <div>
+        <p>All the positions</p>
+        {mousePositions.map((pos, key) => (
+          <div key={key}>
+            <p>{pos.x}</p>
+            <p>{pos.y}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
