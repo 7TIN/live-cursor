@@ -56,17 +56,27 @@ Bun.serve({
       ws.connectionID = connectionID;
       sockets.push(ws);
     },
-    close: (ws) => {
+    close: (ws: websocketType) => {
       console.log("connection close");
+      const temp = sockets.filter((s) => s.connectionID !== ws.connectionID);
+
+      temp.forEach((s) => {
+        s.send(
+          JSON.stringify({
+            type: "userDisconnected",
+            userId: ws.connectionID,
+          }),
+        );
+      });
     },
     message: (ws: websocketType, message) => {
-      console.log(message);
+    //   console.log(message);
       const parsed = JSON.parse(message.toString());
 
       if (parsed.type === "mousePosition") {
         sockets.map((w) => {
           if (w.connectionID !== ws.connectionID) {
-            w.send(JSON.stringify(parsed));
+            w.send(JSON.stringify({ ...parsed, userId: ws.connectionID }));
           }
         });
       } else if (parsed.type === "chat") {
@@ -75,9 +85,8 @@ Bun.serve({
             w.send(JSON.stringify(parsed));
           }
         });
-      }
-      else if (parsed.type === "connection") {
-        console.log(parsed.message)
+      } else if (parsed.type === "connection") {
+        console.log(parsed.message);
       }
     },
   },

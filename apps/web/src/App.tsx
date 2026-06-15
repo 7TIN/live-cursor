@@ -1,11 +1,3 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-// import { APITester } from "./APITester";
 import "./index.css";
 import {
   useCallback,
@@ -15,8 +7,6 @@ import {
   type ChangeEvent,
   type MouseEvent,
 } from "react";
-import type { ServerWebSocket } from "bun";
-import { Pointer } from "lucide-react";
 import { RemoteCursor } from "./components/ui/RemoteCursor";
 
 interface websocketType extends WebSocket {
@@ -28,75 +18,88 @@ type mousePositionType = {
   y: number;
 };
 
+type CursorState = {
+  userId: string;
+
+  animatedPosition: {
+    x: number;
+    y: number;
+  };
+
+  targetPosition: {
+    x: number;
+    y: number;
+  };
+
+  isVisible: boolean;
+};
+
 export function App() {
+  const [cursors, setCursors] = useState<Record<string, CursorState>>({});
+  const cursorsRef = useRef<Record<string, CursorState>>({});
+
   const [mousePosition, setMousePosition] = useState({
     x: 0,
     y: 0,
   });
-  const [animatedPosition, setAnimatedPosition] = useState({
-    x: 0,
-    y: 0,
-  });
+
+  const [msg, setMsg] = useState<string>("");
+  const [msgInput, setMsgInput] = useState<string>("");
+  // const [mousePositions, setMousePositions] = useState<mousePositionType[]>([]);
+
+  const webSocket = useRef<websocketType | null>(null);
 
   const positionQueueRef = useRef<mousePositionType[]>([]);
   const animationFrameRef = useRef<number | null>(null);
-  const animationStateRef = useRef({
-    isAnimating: false,
-    startPosition: { x: 0, y: 0 },
-    targetPosition: { x: 0, y: 0 },
-    startTime: 0,
-    duration: 120, // 120ms smooth animation between positions
-  });
 
-  const lerp = (start: number, end: number, t: number): number => {
-    return start + (end - start) * t;
-  };
-  const animateNextPosition = useCallback(() => {
-    const state = animationStateRef.current;
+  useEffect(() => {
+    const animate = () => {
+      let changed = false;
 
-    if (state.isAnimating) {
-      const now = Date.now();
-      const elapsed = now - state.startTime;
-      const progress = Math.min(elapsed / state.duration, 1);
+      const nextCursors = {
+        ...cursorsRef.current,
+      };
 
-      const newX = lerp(
-        state.startPosition.x,
-        state.targetPosition.x,
-        progress,
-      );
-      const newY = lerp(
-        state.startPosition.y,
-        state.targetPosition.y,
-        progress,
-      );
+      Object.keys(nextCursors).forEach((userId) => {
+        const cursor = nextCursors[userId]!;
 
-      setAnimatedPosition({ x: newX, y: newY });
+        const dx = cursor.targetPosition.x - cursor.animatedPosition.x;
 
-      if (progress < 1) {
-        animationFrameRef.current = requestAnimationFrame(animateNextPosition);
-      } else {
-        // Animation complete, move to next position in queue
-        state.isAnimating = false;
-        if (positionQueueRef.current.length > 0) {
-          const nextTarget = positionQueueRef.current.shift()!;
-          state.startPosition = { x: newX, y: newY };
-          state.targetPosition = nextTarget;
-          state.startTime = Date.now();
-          state.isAnimating = true;
-          animationFrameRef.current =
-            requestAnimationFrame(animateNextPosition);
+        const dy = cursor.targetPosition.y - cursor.animatedPosition.y;
+
+        if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+          changed = true;
+
+          // cursor.animatedPosition = {
+          //   x: cursor.animatedPosition.x + dx * 0.15,
+          //   y: cursor.animatedPosition.y + dy * 0.15,
+          // };
+          nextCursors[userId] = {
+            ...cursor,
+            animatedPosition: {
+              x: cursor.animatedPosition.x + dx * 0.15,
+              y: cursor.animatedPosition.y + dy * 0.15,
+            },
+          };
         }
+      });
+
+      if (changed) {
+        cursorsRef.current = nextCursors;
+        setCursors(nextCursors);
       }
-    } else if (positionQueueRef.current.length > 0) {
-      // Start new animation
-      const nextTarget = positionQueueRef.current.shift()!;
-      state.startPosition = { ...animatedPosition };
-      state.targetPosition = nextTarget;
-      state.startTime = Date.now();
-      state.isAnimating = true;
-      animationFrameRef.current = requestAnimationFrame(animateNextPosition);
-    }
-  }, [animatedPosition]);
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
 
   const useThrottle = <T extends (...args: globalThis.MouseEvent[]) => void>(
     callback: T,
@@ -114,15 +117,6 @@ export function App() {
   };
 
   useEffect(() => {
-    // use the DOM MouseEvent type to match window.addEventListener signature
-    // const handleMouseEvent = (e: globalThis.MouseEvent) => {
-    //   setMousePosition({
-    //     x: e.clientX,
-    //     y: e.clientY,
-    //   });
-    // };
-    // function Throttle < T extends (...args : []) => void>(callback : T, delay : number) {}
-
     const handleMouseEvent = useThrottle((e: globalThis.MouseEvent) => {
       const position = {
         x: e.clientX,
@@ -142,12 +136,6 @@ export function App() {
       window.removeEventListener("mousemove", handleMouseEvent);
     };
   }, []);
-
-  const [msg, setMsg] = useState<string>("");
-  const [msgInput, setMsgInput] = useState<string>("");
-  const [mousePositions, setMousePositions] = useState<mousePositionType[]>([]);
-
-  const webSocket = useRef<websocketType | null>(null);
 
   const handleInputMsgChange = (e: ChangeEvent<HTMLInputElement>) => {
     setMsgInput(e.target.value);
@@ -169,7 +157,6 @@ export function App() {
 
     wss.addEventListener("open", (e) => {
       console.log("connected");
-      // wss.send("connected from client");
     });
 
     wss.addEventListener("close", (e) => {
@@ -177,17 +164,44 @@ export function App() {
     });
 
     wss.addEventListener("message", (e) => {
-      // console.log(e.data);
-      // const msg = JSON.stringify(e.data)
-      // console.log(msg)
       const msg = JSON.parse(e.data);
-      if (msg.type === "mousePosition") {
-        // setMousePositions((mp) => [...mp, msg.mousePosition]);
 
-        positionQueueRef.current.push(msg.mousePosition);
-        animateNextPosition();
+      if (msg.type === "mousePosition") {
+        setCursors((prev) => {
+          const existing = prev[msg.userId];
+
+          const next = {
+            ...prev,
+
+            [msg.userId]: {
+              userId: msg.userId,
+
+              animatedPosition: existing?.animatedPosition ?? msg.mousePosition,
+
+              targetPosition: msg.mousePosition,
+
+              isVisible: true,
+            },
+          };
+
+          cursorsRef.current = next;
+
+          return next;
+        });
+
+        // animateNextPosition();
       } else if (msg.type === "chat") {
         setMsg(msg.message);
+      } else if (msg.type === "userDisconnected") {
+        setCursors((prev) => {
+          const next = { ...prev };
+
+          delete next[msg.userId];
+
+          cursorsRef.current = next;
+
+          return next;
+        });
       }
     });
 
@@ -213,13 +227,23 @@ export function App() {
       >
         <Pointer className="w-6 h-6 text-blue-500" />
       </div> */}
-      <RemoteCursor
+      {/* <RemoteCursor
         x={animatedPosition.x}
         y={animatedPosition.y}
         userName="Remote User"
         color="blue"
-        isVisible={true}
-      />
+        isVisible={isCursorVisible}
+      /> */}
+
+      {Object.entries(cursors).map(([userId, cursor]) => (
+        <RemoteCursor
+          key={userId}
+          x={cursor.animatedPosition.x}
+          y={cursor.animatedPosition.y}
+          userName={userId}
+          isVisible={cursor.isVisible}
+        />
+      ))}
     </div>
   );
 }
